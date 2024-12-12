@@ -2,17 +2,19 @@ use std::{cell::RefCell, io::Write, ops::DerefMut, rc::Rc};
 
 use eframe::{
     egui::{
-        CentralPanel, Color32, RichText, ScrollArea, SidePanel, TextBuffer, TextEdit, TopBottomPanel, Ui, Vec2
+        CentralPanel, Color32, RichText, ScrollArea, SidePanel, TextBuffer, TextEdit,
+        TopBottomPanel, Ui, Vec2,
     },
     NativeOptions,
 };
 use egui_extras::syntax_highlighting::{highlight, CodeTheme};
-use rustpython_vm::{builtins::PyFunction, compiler::Mode, object::Traverse};
 use rustpython_vm::Interpreter;
+use rustpython_vm::{builtins::PyFunction, compiler::Mode, object::Traverse};
 
 fn main() {
     let mut code = String::new();
     let mut output = Rc::new(RefCell::new(String::new()));
+    let mut error: Option<String> = None;
 
     eframe::run_simple_native("datathing", NativeOptions::default(), move |ctx, _frame| {
         let mut changed = false;
@@ -32,21 +34,24 @@ fn main() {
             };
 
             ScrollArea::vertical().show(ui, |ui| {
-                changed |= ui.add(
-                    TextEdit::multiline(&mut code)
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(50)
-                    .code_editor()
-                    .layouter(&mut layouter),
-                ).changed();
+                changed |= ui
+                    .add(
+                        TextEdit::multiline(&mut code)
+                            .desired_width(f32::INFINITY)
+                            .desired_rows(50)
+                            .code_editor()
+                            .layouter(&mut layouter),
+                    )
+                    .changed();
             });
         });
 
         CentralPanel::default().show(ctx, |ui| {
-            let output = if changed {
+            if changed {
                 Interpreter::without_stdlib(Default::default()).enter(|vm| {
                     let scope = vm.new_scope_with_builtins();
                     output.borrow_mut().clear();
+                    error = None;
 
                     //let sys = vm.import("sys", 0).unwrap();
                     //let stdout = sys.get_item("stdout", vm).unwrap();
@@ -63,30 +68,31 @@ fn main() {
                     let code_obj = vm.compile(&code, Mode::Exec, "<embedded>".to_owned()); //.map_err(|err| vm.new_syntax_error(&err, Some(&code)));
                     match code_obj {
                         Ok(obj) => {
-                            let clear_code = [0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a, 0x1b, 0x5b, 0x33, 0x4a];
+                            /*
+                            let clear_code = [
+                                0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a, 0x1b, 0x5b, 0x33, 0x4a,
+                            ];
                             let _ = std::io::stdout().write_all(&clear_code);
                             let _ = std::io::stdout().flush();
+                            */
                             if let Err(e) = vm.run_code_obj(obj, scope) {
-                                ui.label(RichText::new(format!("{:#?}", e)).color(Color32::RED));
-                                None
-                            } else {
-                                Some(&output)
+                                error = Some(format!("{:#?}", e));
                             }
                         }
                         Err(e) => {
-                            ui.label(RichText::new(e.to_string()).color(Color32::RED));
-                            None
+                            error = Some(format!("{:#?}", e));
                         }
                     }
                 })
-            } else {
-                Some(&output)
             };
 
-            if let Some(output) = output {
+            if let Some(error) = &error {
+                ui.label(RichText::new(error).color(Color32::RED));
+            } else {
                 ui.label(RichText::new("Success").color(Color32::LIGHT_GREEN));
                 ui.label(RichText::new(output.borrow().as_str()).code());
             }
         });
-    }).unwrap();
+    })
+    .unwrap();
 }
