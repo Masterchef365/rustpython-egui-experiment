@@ -7,11 +7,12 @@ use eframe::{
     NativeOptions,
 };
 use egui_extras::syntax_highlighting::{highlight, CodeTheme};
-use rustpython_vm::{builtins::PyFunction, compiler::Mode};
+use rustpython_vm::{builtins::PyFunction, compiler::Mode, object::Traverse};
 use rustpython_vm::Interpreter;
 
 fn main() {
     let mut code = String::new();
+    let mut output = String::new();
 
     eframe::run_simple_native("datathing", NativeOptions::default(), move |ctx, _frame| {
         let mut changed = false;
@@ -33,41 +34,55 @@ fn main() {
             ScrollArea::vertical().show(ui, |ui| {
                 changed |= ui.add(
                     TextEdit::multiline(&mut code)
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(50)
-                        .code_editor()
-                        .layouter(&mut layouter),
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(50)
+                    .code_editor()
+                    .layouter(&mut layouter),
                 ).changed();
             });
         });
 
         CentralPanel::default().show(ctx, |ui| {
-            Interpreter::without_stdlib(Default::default()).enter(|vm| {
-                let scope = vm.new_scope_with_builtins();
+            let output = if changed {
+                Interpreter::without_stdlib(Default::default()).enter(|vm| {
+                    let scope = vm.new_scope_with_builtins();
 
-                let k = vm.new_function("habeebit", |funge: i32| dbg!(funge)*funge);
-                let r = vm.ctx.new_str("blork");
+                    let sys = vm.import("sys", 0).unwrap();
+                    //let stdout = sys.get_item("stdout", vm).unwrap();
 
-                scope.globals.set_item("habeebit", k.into(), vm);
-                scope.globals.set_item("zeb", r.into(), vm);
-                
-                let code_obj = vm.compile(&code, Mode::Exec, "<embedded>".to_owned()); //.map_err(|err| vm.new_syntax_error(&err, Some(&code)));
-                match code_obj {
-                    Ok(obj) => {
-                        let clear_code = [0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a, 0x1b, 0x5b, 0x33, 0x4a];
-                        let _ = std::io::stdout().write_all(&clear_code);
-                        let _ = std::io::stdout().flush();
-                        if let Err(_e) = vm.run_code_obj(obj, scope) {
-                            ui.label(RichText::new("Compile error").color(Color32::RED));
-                        } else {
+                    let writer = vm.new_function("write", |s: String| println!("{}", s));
+
+                    //sys.del_item("stdout", vm).unwrap();
+                    //stdout.set_item("write", writer.into(), vm).unwrap();
+                    scope.globals.set_item("write", writer.into(), vm).unwrap();
+
+                    let code_obj = vm.compile(&code, Mode::Exec, "<embedded>".to_owned()); //.map_err(|err| vm.new_syntax_error(&err, Some(&code)));
+                    match code_obj {
+                        Ok(obj) => {
+                            let clear_code = [0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a, 0x1b, 0x5b, 0x33, 0x4a];
+                            let _ = std::io::stdout().write_all(&clear_code);
+                            let _ = std::io::stdout().flush();
+                            if let Err(e) = vm.run_code_obj(obj, scope) {
+                                ui.label(RichText::new(format!("{:#?}", e)).color(Color32::RED));
+                                None
+                            } else {
+                                Some(&output)
+                            }
+                        }
+                        Err(e) => {
+                            ui.label(RichText::new(e.to_string()).color(Color32::RED));
+                            None
                         }
                     }
-                    Err(e) => {
-                        ui.label(RichText::new(e.to_string()).color(Color32::RED));
-                    }
-                }
-            });
+                })
+            } else {
+                Some(&output)
+            };
+
+            if let Some(output) = output {
+                ui.label(RichText::new("Success").color(Color32::LIGHT_GREEN));
+                ui.label(RichText::new(output).code());
+            }
         });
-    })
-    .unwrap();
+    }).unwrap();
 }
