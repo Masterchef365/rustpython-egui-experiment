@@ -7,13 +7,15 @@ use eframe::{
     NativeOptions,
 };
 use egui_extras::syntax_highlighting::{highlight, CodeTheme};
-use rustpython_vm::compiler::Mode;
+use rustpython_vm::{builtins::PyFunction, compiler::Mode};
 use rustpython_vm::Interpreter;
 
 fn main() {
     let mut code = String::new();
 
     eframe::run_simple_native("datathing", NativeOptions::default(), move |ctx, _frame| {
+        let mut changed = false;
+
         SidePanel::left("leeft").show(ctx, |ui| {
             let mut layouter = move |ui: &Ui, string: &str, wrap_width: f32| {
                 let mut layout_job = highlight(
@@ -29,19 +31,26 @@ fn main() {
             };
 
             ScrollArea::vertical().show(ui, |ui| {
-                ui.add(
+                changed |= ui.add(
                     TextEdit::multiline(&mut code)
                         .desired_width(f32::INFINITY)
                         .desired_rows(50)
                         .code_editor()
                         .layouter(&mut layouter),
-                );
+                ).changed();
             });
         });
 
         CentralPanel::default().show(ctx, |ui| {
             Interpreter::without_stdlib(Default::default()).enter(|vm| {
                 let scope = vm.new_scope_with_builtins();
+
+                let k = vm.new_function("habeebit", |funge: i32| dbg!(funge)*funge);
+                let r = vm.ctx.new_str("blork");
+
+                scope.globals.set_item("habeebit", k.into(), vm);
+                scope.globals.set_item("zeb", r.into(), vm);
+                
                 let code_obj = vm.compile(&code, Mode::Exec, "<embedded>".to_owned()); //.map_err(|err| vm.new_syntax_error(&err, Some(&code)));
                 match code_obj {
                     Ok(obj) => {
