@@ -1,98 +1,72 @@
-use std::{cell::RefCell, io::Write, ops::DerefMut, rc::Rc};
+#![warn(clippy::all, rust_2018_idioms)]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use eframe::{
-    egui::{
-        CentralPanel, Color32, RichText, ScrollArea, SidePanel, TextBuffer, TextEdit,
-        TopBottomPanel, Ui, Vec2,
-    },
-    NativeOptions,
-};
-use egui_extras::syntax_highlighting::{highlight, CodeTheme};
-use rustpython_vm::Interpreter;
-use rustpython_vm::{builtins::PyFunction, compiler::Mode, object::Traverse};
+// When compiling natively:
+#[cfg(not(target_arch = "wasm32"))]
+fn main() -> eframe::Result {
+    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
 
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([400.0, 300.0])
+            .with_min_inner_size([300.0, 220.0])
+            .with_icon(
+                // NOTE: Adding an icon is optional
+                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])
+                    .expect("Failed to load icon"),
+            ),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "eframe template",
+        native_options,
+        Box::new(|cc| Ok(Box::new(eframe_template::TemplateApp::new(cc)))),
+    )
+}
+
+// When compiling to web using trunk:
+#[cfg(target_arch = "wasm32")]
 fn main() {
-    let mut code = String::new();
-    let mut output = Rc::new(RefCell::new(String::new()));
-    let mut error: Option<String> = None;
+    use eframe::wasm_bindgen::JsCast as _;
 
-    eframe::run_simple_native("datathing", NativeOptions::default(), move |ctx, _frame| {
-        let mut changed = false;
+    // Redirect `log` message to `console.log` and friends:
+    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 
-        SidePanel::left("leeft").show(ctx, |ui| {
-            let mut layouter = move |ui: &Ui, string: &str, wrap_width: f32| {
-                let mut layout_job = highlight(
-                    ui.ctx(),
-                    ui.style(),
-                    &CodeTheme::from_style(ui.style()),
-                    string,
-                    "py",
-                );
+    let web_options = eframe::WebOptions::default();
 
-                layout_job.wrap.max_width = wrap_width;
-                ui.fonts(|f| f.layout_job(layout_job.clone()))
-            };
+    wasm_bindgen_futures::spawn_local(async {
+        let document = web_sys::window()
+            .expect("No window")
+            .document()
+            .expect("No document");
 
-            ScrollArea::vertical().show(ui, |ui| {
-                changed |= ui
-                    .add(
-                        TextEdit::multiline(&mut code)
-                            .desired_width(f32::INFINITY)
-                            .desired_rows(50)
-                            .code_editor()
-                            .layouter(&mut layouter),
-                    )
-                    .changed();
-            });
-        });
+        let canvas = document
+            .get_element_by_id("the_canvas_id")
+            .expect("Failed to find the_canvas_id")
+            .dyn_into::<web_sys::HtmlCanvasElement>()
+            .expect("the_canvas_id was not a HtmlCanvasElement");
 
-        CentralPanel::default().show(ctx, |ui| {
-            if changed {
-                Interpreter::without_stdlib(Default::default()).enter(|vm| {
-                    let scope = vm.new_scope_with_builtins();
-                    output.borrow_mut().clear();
-                    error = None;
+        let start_result = eframe::WebRunner::new()
+            .start(
+                canvas,
+                web_options,
+                Box::new(|cc| Ok(Box::new(eframe_template::TemplateApp::new(cc)))),
+            )
+            .await;
 
-                    //let sys = vm.import("sys", 0).unwrap();
-                    //let stdout = sys.get_item("stdout", vm).unwrap();
-
-                    let output_c = output.clone();
-                    let writer = vm.new_function("write", move |s: String| {
-                        *output_c.borrow_mut() += &s;
-                    });
-
-                    //sys.del_item("stdout", vm).unwrap();
-                    //stdout.set_item("write", writer.into(), vm).unwrap();
-                    scope.globals.set_item("write", writer.into(), vm).unwrap();
-
-                    let code_obj = vm.compile(&code, Mode::Exec, "<embedded>".to_owned()); //.map_err(|err| vm.new_syntax_error(&err, Some(&code)));
-                    match code_obj {
-                        Ok(obj) => {
-                            /*
-                            let clear_code = [
-                                0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a, 0x1b, 0x5b, 0x33, 0x4a,
-                            ];
-                            let _ = std::io::stdout().write_all(&clear_code);
-                            let _ = std::io::stdout().flush();
-                            */
-                            if let Err(e) = vm.run_code_obj(obj, scope) {
-                                error = Some(format!("{:#?}", e));
-                            }
-                        }
-                        Err(e) => {
-                            error = Some(format!("{:#?}", e));
-                        }
-                    }
-                })
-            };
-
-            if let Some(error) = &error {
-                ui.label(RichText::new(error).color(Color32::RED));
-            } else {
-                ui.label(RichText::new("Success").color(Color32::LIGHT_GREEN));
-                ui.label(RichText::new(output.borrow().as_str()).code());
+        // Remove the loading text and spinner:
+        if let Some(loading_text) = document.get_element_by_id("loading_text") {
+            match start_result {
+                Ok(_) => {
+                    loading_text.remove();
+                }
+                Err(e) => {
+                    loading_text.set_inner_html(
+                        "<p> The app has crashed. See the developer console for details. </p>",
+                    );
+                    panic!("Failed to start eframe: {e:?}");
+                }
             }
-        });
-    })
-    .unwrap();
+        }
+    });
 }
