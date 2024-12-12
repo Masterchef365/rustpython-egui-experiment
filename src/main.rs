@@ -1,8 +1,8 @@
-use std::io::Write;
+use std::{cell::RefCell, io::Write, ops::DerefMut, rc::Rc};
 
 use eframe::{
     egui::{
-        CentralPanel, Color32, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Ui, Vec2,
+        CentralPanel, Color32, RichText, ScrollArea, SidePanel, TextBuffer, TextEdit, TopBottomPanel, Ui, Vec2
     },
     NativeOptions,
 };
@@ -12,7 +12,7 @@ use rustpython_vm::Interpreter;
 
 fn main() {
     let mut code = String::new();
-    let mut output = String::new();
+    let mut output = Rc::new(RefCell::new(String::new()));
 
     eframe::run_simple_native("datathing", NativeOptions::default(), move |ctx, _frame| {
         let mut changed = false;
@@ -46,11 +46,15 @@ fn main() {
             let output = if changed {
                 Interpreter::without_stdlib(Default::default()).enter(|vm| {
                     let scope = vm.new_scope_with_builtins();
+                    output.borrow_mut().clear();
 
-                    let sys = vm.import("sys", 0).unwrap();
+                    //let sys = vm.import("sys", 0).unwrap();
                     //let stdout = sys.get_item("stdout", vm).unwrap();
 
-                    let writer = vm.new_function("write", |s: String| println!("{}", s));
+                    let output_c = output.clone();
+                    let writer = vm.new_function("write", move |s: String| {
+                        *output_c.borrow_mut() += &s;
+                    });
 
                     //sys.del_item("stdout", vm).unwrap();
                     //stdout.set_item("write", writer.into(), vm).unwrap();
@@ -81,7 +85,7 @@ fn main() {
 
             if let Some(output) = output {
                 ui.label(RichText::new("Success").color(Color32::LIGHT_GREEN));
-                ui.label(RichText::new(output).code());
+                ui.label(RichText::new(output.borrow().as_str()).code());
             }
         });
     }).unwrap();
