@@ -116,19 +116,21 @@ impl eframe::App for TemplateApp {
                             let _ = std::io::stdout().write_all(&clear_code);
                             let _ = std::io::stdout().flush();
                             */
-                            if let Err(e) = vm.run_code_obj(obj, scope) {
-                                self.error = Some(format!("{:#?}", e));
+                            if let Err(exec_err) = vm.run_code_obj(obj, scope) {
+                                let mut s = String::new();
+                                vm.write_exception(&mut s, &exec_err).unwrap();
+                                self.error = Some(s);
                             }
                         }
-                        Err(e) => {
-                            self.error = Some(format!("{:#?}", e));
+                        Err(compile_err) => {
+                            self.error = Some(format!("{:#?}", compile_err));
                         }
                     }
                 })
             };
 
             if let Some(error) = &self.error {
-                ui.label(RichText::new(error).color(Color32::RED));
+                ui.label(RichText::new(error).color(Color32::LIGHT_RED));
             } else {
                 ui.label(RichText::new("Success").color(Color32::LIGHT_GREEN));
                 ui.label(RichText::new(self.output.borrow().as_str()).code());
