@@ -76,21 +76,52 @@ impl eframe::App for TemplateApp {
             };
 
             ScrollArea::vertical().show(ui, |ui| {
-                changed |= ui
-                    .add(
-                        TextEdit::multiline(&mut self.code)
-                            .desired_width(f32::INFINITY)
-                            .desired_rows(50)
-                            .code_editor()
-                            .layouter(&mut layouter),
-                    )
-                    .changed();
+                let ret = TextEdit::multiline(&mut self.code)
+                    .id("CodeEditor".into())
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(50)
+                    .code_editor()
+                    .layouter(&mut layouter)
+                    .show(ui);
+
+                // Did we make a new line?
+                if ret.response.changed() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    if let Some(cursor) = ret.cursor_range {
+                        let cursor = cursor.primary.ccursor;
+
+                        let prev_newline_idx = self.code[..cursor.index - 1].rfind('\n');
+
+                        if cursor.prefer_next_row {
+                            if let Some(prev) = prev_newline_idx {
+                                // Find the indent
+                                let indent_chars: String = self.code[prev..cursor.index]
+                                    .chars()
+                                    .take_while(|c| c.is_whitespace())
+                                    .filter(|c| *c == ' ' || *c == '\t')
+                                    .collect();
+
+                                // Insert indent
+                                self.code.insert_str(cursor.index, &indent_chars);
+
+                                // Set the new cursor pos
+                                let mut new_cursor_range = cursor;
+                                new_cursor_range.index += indent_chars.len();
+                                let mut new_state = ret.state;
+                                new_state.cursor.set_char_range(Some(egui::text::CCursorRange::one(new_cursor_range)));
+                                TextEdit::store_state(ui.ctx(), "CodeEditor".into(), new_state);
+                            }
+                        }
+                    }
+                }
+
+                changed |= ret.response.changed();
             });
         });
 
         if changed {
             Interpreter::without_stdlib(Default::default()).enter(|vm| {
                 let scope = vm.new_scope_with_builtins();
+
                 self.output.borrow_mut().clear();
                 self.error = None;
 
@@ -130,14 +161,17 @@ impl eframe::App for TemplateApp {
         };
 
         CentralPanel::default().show(ctx, |ui| {
-            ScrollArea::vertical().max_width(f32::INFINITY).auto_shrink([false, false]).show(ui, |ui| {
-                if let Some(error) = &self.error {
-                    ui.label(RichText::new(error).color(Color32::LIGHT_RED));
-                } else {
-                    ui.label(RichText::new("Success").color(Color32::LIGHT_GREEN));
-                    ui.label(RichText::new(self.output.borrow().as_str()).code());
-                }
-            });
+            ScrollArea::vertical()
+                .max_width(f32::INFINITY)
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    if let Some(error) = &self.error {
+                        ui.label(RichText::new(error).color(Color32::LIGHT_RED));
+                    } else {
+                        ui.label(RichText::new("Success").color(Color32::LIGHT_GREEN));
+                        ui.label(RichText::new(self.output.borrow().as_str()).code());
+                    }
+                });
         });
     }
 }
