@@ -70,7 +70,9 @@ impl eframe::App for TemplateApp {
         });
 
         if changed {
-            Interpreter::without_stdlib(Default::default()).enter(|vm| {
+            Interpreter::with_init(Default::default(), |vm| {
+                vm.add_native_modules(rustpython_stdlib::get_module_inits());
+            }).enter(|vm| {
                 let scope = vm.new_scope_with_builtins();
 
                 self.output.borrow_mut().clear();
