@@ -78,28 +78,19 @@ impl eframe::App for TemplateApp {
                 self.output.borrow_mut().clear();
                 self.error = None;
 
-                //let sys = vm.import("sys", 0).unwrap();
-                //let stdout = sys.get_item("stdout", vm).unwrap();
+                let sys = vm.import("sys", 0).unwrap();
+                let stdout = sys.get_attr("stdout", vm).unwrap();
 
                 let output_c = self.output.clone();
                 let writer = vm.new_function("write", move |s: String| {
                     *output_c.borrow_mut() += &s;
                 });
 
-                //sys.del_item("stdout", vm).unwrap();
-                //stdout.set_item("write", writer.into(), vm).unwrap();
-                scope.globals.set_item("write", writer.into(), vm).unwrap();
+                stdout.set_attr("write", writer, vm).unwrap();
 
                 let code_obj = vm.compile(&self.code, Mode::Exec, "<embedded>".to_owned()); //.map_err(|err| vm.new_syntax_error(&err, Some(&code)));
                 match code_obj {
                     Ok(obj) => {
-                        /*
-                        let clear_code = [
-                            0x1b, 0x5b, 0x48, 0x1b, 0x5b, 0x32, 0x4a, 0x1b, 0x5b, 0x33, 0x4a,
-                        ];
-                        let _ = std::io::stdout().write_all(&clear_code);
-                        let _ = std::io::stdout().flush();
-                        */
                         if let Err(exec_err) = vm.run_code_obj(obj, scope) {
                             let mut s = String::new();
                             vm.write_exception(&mut s, &exec_err).unwrap();
