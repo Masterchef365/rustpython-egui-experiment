@@ -32,9 +32,8 @@ impl Runtime {
     }
 
     pub fn load(&mut self, code: String) {
+        let scope = self.scope.clone();
         self.interpreter.enter(|vm| {
-            let scope = vm.new_scope_with_builtins();
-
             self.output.borrow_mut().clear();
             self.error = None;
 
