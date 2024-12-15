@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use egui::{CentralPanel, Color32, Id, Response, RichText, ScrollArea, SidePanel, TextEdit, Ui};
 use egui_extras::syntax_highlighting::{highlight, CodeTheme};
+use rustpython_vm::import::import_source;
 //use egui_extras::syntax_highlighting::{highlight, CodeTheme};
 use rustpython_vm::Interpreter;
 use rustpython_vm::{builtins::PyFunction, compiler::Mode, object::Traverse};
@@ -87,6 +88,12 @@ impl eframe::App for TemplateApp {
                 });
 
                 stdout.set_attr("write", writer, vm).unwrap();
+
+                if let Err(e) = import_source(vm, "euclid", include_str!("./euclid/euclid.py")) {
+                    let mut s = String::new();
+                    vm.write_exception(&mut s, &e).unwrap();
+                    panic!("{}", s);
+                }
 
                 let code_obj = vm.compile(&self.code, Mode::Exec, "<embedded>".to_owned()); //.map_err(|err| vm.new_syntax_error(&err, Some(&code)));
                 match code_obj {

@@ -1,0 +1,3 @@
+[submodule "src/euclid"]
+	path = src/euclid
+	url = git@github.com:Masterchef365/python-euclid.git
