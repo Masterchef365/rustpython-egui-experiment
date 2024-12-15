@@ -16,17 +16,14 @@ pub struct TemplateApp {
     code: String,
 
     #[serde(skip)]
-    output: Rc<RefCell<String>>,
-    #[serde(skip)]
-    error: Option<String>,
+    runtime: crate::Runtime,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
             code: "write(\"Hello World!\")".to_string(),
-            output: Default::default(),
-            error: None,
+            runtime: crate::Runtime::new(),
         }
     }
 }
@@ -46,8 +43,7 @@ impl TemplateApp {
 
         Self {
             code,
-            output: Default::default(),
-            error: None,
+            ..Default::default()
         }
     }
 }
@@ -71,44 +67,7 @@ impl eframe::App for TemplateApp {
         });
 
         if changed {
-            Interpreter::with_init(Default::default(), |vm| {
-                vm.add_native_modules(rustpython_stdlib::get_module_inits());
-            }).enter(|vm| {
-                let scope = vm.new_scope_with_builtins();
-
-                self.output.borrow_mut().clear();
-                self.error = None;
-
-                let sys = vm.import("sys", 0).unwrap();
-                let stdout = sys.get_attr("stdout", vm).unwrap();
-
-                let output_c = self.output.clone();
-                let writer = vm.new_function("write", move |s: String| {
-                    *output_c.borrow_mut() += &s;
-                });
-
-                stdout.set_attr("write", writer, vm).unwrap();
-
-                if let Err(e) = import_source(vm, "euclid", include_str!("./euclid/euclid.py")) {
-                    let mut s = String::new();
-                    vm.write_exception(&mut s, &e).unwrap();
-                    panic!("{}", s);
-                }
-
-                let code_obj = vm.compile(&self.code, Mode::Exec, "<embedded>".to_owned()); //.map_err(|err| vm.new_syntax_error(&err, Some(&code)));
-                match code_obj {
-                    Ok(obj) => {
-                        if let Err(exec_err) = vm.run_code_obj(obj, scope) {
-                            let mut s = String::new();
-                            vm.write_exception(&mut s, &exec_err).unwrap();
-                            self.error = Some(s);
-                        }
-                    }
-                    Err(compile_err) => {
-                        self.error = Some(format!("{:#?}", compile_err));
-                    }
-                }
-            })
+            self.runtime.load(self.code.clone());
         };
 
         CentralPanel::default().show(ctx, |ui| {
@@ -116,11 +75,11 @@ impl eframe::App for TemplateApp {
                 .max_width(f32::INFINITY)
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
-                    if let Some(error) = &self.error {
+                    if let Some(error) = self.runtime.error() {
                         ui.label(RichText::new(error).color(Color32::LIGHT_RED));
                     } else {
                         ui.label(RichText::new("Success").color(Color32::LIGHT_GREEN));
-                        ui.label(RichText::new(self.output.borrow().as_str()).code());
+                        ui.label(RichText::new(self.runtime.stdout().borrow().as_str()).code());
                     }
                 });
         });
