@@ -40,11 +40,7 @@ impl Runtime {
                 *output_c.borrow_mut() += &s;
             });
 
-            if let Err(e) = stdout.set_attr("write", writer, vm) {
-                let mut s = String::new();
-                vm.write_exception(&mut s, &e).unwrap();
-                panic!("{}", s);
-            }
+            stdout.set_attr("write", writer, vm).unwrap();
 
             sys.set_attr("stdout", stdout.clone(), vm).unwrap();
 
