@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 
 pub use app::TemplateApp;
 use rustpython_vm::{
-    builtins::PyCode, compiler::Mode, import::import_source, scope::Scope, Interpreter, PyRef,
+    builtins::{PyCode, PyType}, compiler::Mode, import::import_source, scope::Scope, types::Constructor, Interpreter, PyRef
 };
 
 struct Runtime {
@@ -31,14 +31,23 @@ impl Runtime {
 
             // Set stdout hook
             let sys = vm.import("sys", 0).unwrap();
-            let stdout = sys.get_attr("stdout", vm).unwrap();
+
+            let py_type = vm.builtins.get_attr("type", vm).unwrap();
+            let stdout = py_type.call(("InternalStdout", vm.ctx.new_tuple(vec![]), vm.ctx.new_dict()), vm).unwrap();
 
             let output_c = output.clone();
             let writer = vm.new_function("write", move |s: String| {
                 *output_c.borrow_mut() += &s;
             });
 
-            stdout.set_attr("write", writer, vm).unwrap();
+            if let Err(e) = stdout.set_attr("write", writer, vm) {
+                let mut s = String::new();
+                vm.write_exception(&mut s, &e).unwrap();
+                panic!("{}", s);
+            }
+
+            sys.set_attr("stdout", stdout.clone(), vm).unwrap();
+
 
             // Import a library
             if let Err(e) = import_source(vm, "euclid", include_str!("./euclid/euclid.py")) {
