@@ -36,11 +36,14 @@ impl TemplateApp {
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
-        let project = cc.storage.and_then(|storage| eframe::get_value(storage, eframe::APP_KEY)).unwrap_or_default();
+        let project: Project = cc.storage.and_then(|storage| eframe::get_value(storage, eframe::APP_KEY)).unwrap_or_default();
+
+        let mut runtime = Runtime::new();
+        runtime.load(project.code.clone());
 
         Self {
             project,
-            runtime: Runtime::new(),
+            runtime,
         }
     }
 }
@@ -96,25 +99,30 @@ impl eframe::App for TemplateApp {
             RunMode::OnCodeChange => changed,
         };
 
-        //let start = Instant::now();
-        if run_requested || force_step {
-            self.runtime.run_loaded_code();
-        }
-        //println!("Run took {}ms", (start.elapsed().as_secs_f32() * 1000.0).floor());
-
         CentralPanel::default().show(ctx, |ui| {
             ScrollArea::vertical()
                 .max_width(f32::INFINITY)
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
+                    if self.project.run_mode.show_run_button() {
+                        if ui.button("Run").clicked() {
+                            force_step = true;
+                        }
+                    }
+
                     if let Some(error) = self.runtime.error() {
                         ui.label(RichText::new(error).color(Color32::LIGHT_RED));
                     } else {
-                        ui.label(RichText::new("Success").color(Color32::LIGHT_GREEN));
                         ui.label(RichText::new(self.runtime.stdout().borrow().as_str()).code());
                     }
                 });
         });
+
+        //let start = Instant::now();
+        if run_requested || force_step {
+            self.runtime.run_loaded_code();
+        }
+        //println!("Run took {}ms", (start.elapsed().as_secs_f32() * 1000.0).floor());
     }
 }
 
@@ -194,6 +202,10 @@ impl RunMode {
         ui.selectable_value(self, Self::OnScreenUpdate, "On Screen Update");
         ui.selectable_value(self, Self::OnCodeChange, "On Code Change");
         ui.selectable_value(self, Self::Manual, "Manual");
+    }
+
+    fn show_run_button(&self) -> bool {
+        matches!(self, Self::OnCodeChange | Self::Manual)
     }
 }
 
