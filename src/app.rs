@@ -86,18 +86,18 @@ impl eframe::App for TemplateApp {
             //println!("Load took {}s", start.elapsed().as_secs_f32());
         };
 
-        let run_code = match self.run_mode {
+        let run_requested = match self.run_mode {
             RunMode::Continuous => {
                 ctx.request_repaint();
                 true
             },
-            RunMode::Manual => force_step,
+            RunMode::Manual => false,
             RunMode::OnScreenUpdate => true,
-            RunMode::OnCodeChange => changed || force_step,
+            RunMode::OnCodeChange => changed,
         };
 
         //let start = Instant::now();
-        if run_code {
+        if run_requested || force_step {
             self.runtime.run_loaded_code();
         }
         //println!("Run took {}ms", (start.elapsed().as_secs_f32() * 1000.0).floor());
