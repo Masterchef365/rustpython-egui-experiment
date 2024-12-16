@@ -65,11 +65,19 @@ impl eframe::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut force_step = ctx.input(|r| r.key_pressed(Key::G) && r.modifiers.ctrl);
+        let reset_state = ctx.input(|r| r.key_pressed(Key::R) && r.modifiers.ctrl);
+
         TopBottomPanel::top("toope").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("Run", |ui| {
                     ui.menu_button("Mode", |ui| self.run_mode.show(ui));
                     force_step |= ui.button("Step (CTRL + G)").clicked();
+                });
+
+                ui.menu_button("State", |ui| {
+                    if reset_state || ui.button("Reset (CTRL + R)").clicked() {
+                        self.runtime.reset_state();
+                    }
                 });
             });
         });
