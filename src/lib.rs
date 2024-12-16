@@ -5,7 +5,12 @@ use std::{cell::RefCell, rc::Rc};
 
 pub use app::TemplateApp;
 use rustpython_vm::{
-    builtins::{PyCode, PyType}, compiler::Mode, import::import_source, scope::Scope, types::Constructor, Interpreter, PyRef
+    builtins::{PyCode, PyType},
+    compiler::Mode,
+    import::import_source,
+    scope::Scope,
+    types::Constructor,
+    Interpreter, PyRef, PyResult, VirtualMachine,
 };
 
 struct Runtime {
@@ -15,6 +20,25 @@ struct Runtime {
     error: Option<String>,
     code: String,
     code_obj: Option<PyRef<PyCode>>,
+}
+
+trait UnwrapException<T> {
+    fn unwrap_exception(self, vm: &VirtualMachine) -> T;
+}
+
+impl<T> UnwrapException<T> for PyResult<T> {
+    #[track_caller]
+    fn unwrap_exception(self, vm: &VirtualMachine) -> T {
+        match self {
+            Ok(v) => v,
+            Err(e) => {
+                let mut s = String::new();
+                vm.write_exception(&mut s, &e)
+                    .expect("Failed to write exception");
+                panic!("{}", s);
+            }
+        }
+    }
 }
 
 impl Runtime {
@@ -30,27 +54,28 @@ impl Runtime {
             let scope = vm.new_scope_with_builtins();
 
             // Set stdout hook
-            let sys = vm.import("sys", 0).unwrap();
+            let sys = vm.import("sys", 0).unwrap_exception(vm);
 
-            let py_type = vm.builtins.get_attr("type", vm).unwrap();
-            let stdout = py_type.call(("InternalStdout", vm.ctx.new_tuple(vec![]), vm.ctx.new_dict()), vm).unwrap();
+            let py_type = vm.builtins.get_attr("type", vm).unwrap_exception(vm);
+            let args = (
+                "InternalStdout",
+                vm.ctx.new_tuple(vec![]),
+                vm.ctx.new_dict(),
+            );
+            let stdout = py_type.call(args, vm).unwrap();
 
             let output_c = output.clone();
             let writer = vm.new_function("write", move |s: String| {
                 *output_c.borrow_mut() += &s;
             });
 
-            stdout.set_attr("write", writer, vm).unwrap();
+            stdout.set_attr("write", writer, vm).unwrap_exception(vm);
 
-            sys.set_attr("stdout", stdout.clone(), vm).unwrap();
-
+            sys.set_attr("stdout", stdout.clone(), vm)
+                .unwrap_exception(vm);
 
             // Import a library
-            if let Err(e) = import_source(vm, "euclid", include_str!("./euclid/euclid.py")) {
-                let mut s = String::new();
-                vm.write_exception(&mut s, &e).unwrap();
-                panic!("{}", s);
-            }
+            import_source(vm, "euclid", include_str!("./euclid/euclid.py")).unwrap_exception(vm);
 
             scope
         });
@@ -66,7 +91,6 @@ impl Runtime {
     }
 
     pub fn load(&mut self, code: String) {
-        let scope = self.scope.clone();
         self.interpreter.enter(|vm| {
             let code_obj = vm.compile(&code, Mode::Exec, "<embedded>".to_owned());
             match code_obj {

@@ -4,7 +4,10 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use egui::panel::TopBottomSide;
-use egui::{CentralPanel, Color32, Id, Key, Response, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Ui};
+use egui::{
+    CentralPanel, Color32, Id, Key, Response, RichText, ScrollArea, SidePanel, TextEdit,
+    TopBottomPanel, Ui,
+};
 use egui_extras::syntax_highlighting::{highlight, CodeTheme};
 use rustpython_vm::import::import_source;
 //use egui_extras::syntax_highlighting::{highlight, CodeTheme};
@@ -90,7 +93,7 @@ impl eframe::App for TemplateApp {
             RunMode::Continuous => {
                 ctx.request_repaint();
                 true
-            },
+            }
             RunMode::Manual => false,
             RunMode::OnScreenUpdate => true,
             RunMode::OnCodeChange => changed,
@@ -180,8 +183,7 @@ fn code_editor_with_autoindent(
     ret.response
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 enum RunMode {
     Continuous,
     OnScreenUpdate,
