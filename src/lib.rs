@@ -1,15 +1,16 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 mod app;
-use std::{cell::RefCell, rc::Rc};
+use std::{borrow::BorrowMut, cell::RefCell, rc::Rc};
 
 pub use app::TemplateApp;
+use egui::{Painter, Pos2, Stroke, Ui};
 use rustpython_vm::{
-    builtins::{PyCode, PyType},
+    builtins::{PyCode, PyFloat, PyStrRef, PyType},
     compiler::Mode,
     import::import_source,
     scope::Scope,
-    Interpreter, PyRef, PyResult, VirtualMachine,
+    Interpreter, PyObjectRef, PyRef, PyResult, VirtualMachine,
 };
 
 struct Runtime {
@@ -40,6 +41,12 @@ impl<T> UnwrapException<T> for PyResult<T> {
     }
 }
 
+fn anon_object(vm: &VirtualMachine, name: &str) -> PyObjectRef {
+    let py_type = vm.builtins.get_attr("type", vm).unwrap_exception(vm);
+    let args = (name, vm.ctx.new_tuple(vec![]), vm.ctx.new_dict());
+    py_type.call(args, vm).unwrap_exception(vm)
+}
+
 impl Runtime {
     pub fn new() -> Self {
         let interpreter = Interpreter::with_init(Default::default(), |vm| {
@@ -55,13 +62,7 @@ impl Runtime {
             // Set stdout hook
             let sys = vm.import("sys", 0).unwrap_exception(vm);
 
-            let py_type = vm.builtins.get_attr("type", vm).unwrap_exception(vm);
-            let args = (
-                "InternalStdout",
-                vm.ctx.new_tuple(vec![]),
-                vm.ctx.new_dict(),
-            );
-            let stdout = py_type.call(args, vm).unwrap();
+            let stdout = anon_object(vm, "InternalStdout");
 
             let output_c = output.clone();
             let writer = vm.new_function("write", move |s: String| {
@@ -123,6 +124,34 @@ impl Runtime {
             }
         });
     }
+
+    pub fn do_thing(&mut self, ui: &mut Ui) {
+        let scope = self.scope.clone();
+        let mut ui = ui.new_child(Default::default());
+        self.interpreter.enter(move |vm| {
+            vm.new_function("edit", |s: PyStrRef| {
+                ui.text_edit_singleline(s.borrow_mut());
+            });
+        });
+
+    }
+
+    /*
+    pub fn set_painter(&mut self, painter: Painter) {
+        let scope = self.scope.clone();
+        self.interpreter.enter(move |vm| {
+            vm.new_function("line", |a: PyObjectRef, vm: &VirtualMachine| {
+                let x1: f32 = a
+                    .get_attr("x", vm)
+                    .unwrap_exception(vm)
+                    .try_into_value(vm)
+                    .unwrap_exception(vm);
+                //painter.line_segment([Pos2::new(a[0], a[1]), Pos2::new(b[0], b[1])], Stroke::new(stroke, color.into()));
+            });
+            //scope.globals.
+        });
+    }
+    */
 
     pub fn reset_state(&mut self) {
         let old = std::mem::replace(self, Self::new());

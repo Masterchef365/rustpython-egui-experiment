@@ -56,6 +56,7 @@ impl eframe::App for TemplateApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // TOOD: Wait this is stupid on mobile
         let mut force_step = ctx.input(|r| r.key_pressed(Key::E) && r.modifiers.ctrl);
         let mut reset_state = ctx.input(|r| r.key_pressed(Key::R) && r.modifiers.ctrl);
 
