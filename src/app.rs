@@ -3,7 +3,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
 
-use egui::{CentralPanel, Color32, Id, Response, RichText, ScrollArea, SidePanel, TextEdit, Ui};
+use egui::panel::TopBottomSide;
+use egui::{CentralPanel, Color32, Id, Key, Response, RichText, ScrollArea, SidePanel, TextEdit, TopBottomPanel, Ui};
 use egui_extras::syntax_highlighting::{highlight, CodeTheme};
 use rustpython_vm::import::import_source;
 //use egui_extras::syntax_highlighting::{highlight, CodeTheme};
@@ -16,6 +17,8 @@ use rustpython_vm::{builtins::PyFunction, compiler::Mode, object::Traverse};
 pub struct TemplateApp {
     code: String,
 
+    run_mode: RunMode,
+
     #[serde(skip)]
     runtime: crate::Runtime,
 }
@@ -23,6 +26,7 @@ pub struct TemplateApp {
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
+            run_mode: RunMode::OnCodeChange,
             code: "write(\"Hello World!\")".to_string(),
             runtime: crate::Runtime::new(),
         }
@@ -57,8 +61,17 @@ impl eframe::App for TemplateApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut changed = false;
+        let mut force_step = ctx.input(|r| r.key_pressed(Key::G) && r.modifiers.ctrl);
+        TopBottomPanel::top("toope").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("Run", |ui| {
+                    ui.menu_button("Mode", |ui| self.run_mode.show(ui));
+                    force_step |= ui.button("Step (CTRL + G)").clicked();
+                });
+            });
+        });
 
+        let mut changed = false;
         SidePanel::left("leeft").show(ctx, |ui| {
             ScrollArea::vertical().show(ui, |ui| {
                 changed |=
@@ -73,8 +86,20 @@ impl eframe::App for TemplateApp {
             //println!("Load took {}s", start.elapsed().as_secs_f32());
         };
 
+        let run_code = match self.run_mode {
+            RunMode::Continuous => {
+                ctx.request_repaint();
+                true
+            },
+            RunMode::Manual => force_step,
+            RunMode::OnScreenUpdate => true,
+            RunMode::OnCodeChange => changed || force_step,
+        };
+
         //let start = Instant::now();
-        self.runtime.run_loaded_code();
+        if run_code {
+            self.runtime.run_loaded_code();
+        }
         //println!("Run took {}ms", (start.elapsed().as_secs_f32() * 1000.0).floor());
 
         CentralPanel::default().show(ctx, |ui| {
@@ -153,4 +178,22 @@ fn code_editor_with_autoindent(
     }
 
     ret.response
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RunMode {
+    Continuous,
+    OnScreenUpdate,
+    OnCodeChange,
+    Manual,
+}
+
+impl RunMode {
+    fn show(&mut self, ui: &mut Ui) {
+        ui.selectable_value(self, Self::Continuous, "Continuous");
+        ui.selectable_value(self, Self::OnScreenUpdate, "On Screen Update");
+        ui.selectable_value(self, Self::OnCodeChange, "On Code Change");
+        ui.selectable_value(self, Self::Manual, "Manual");
+    }
 }
