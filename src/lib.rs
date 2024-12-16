@@ -9,7 +9,6 @@ use rustpython_vm::{
     compiler::Mode,
     import::import_source,
     scope::Scope,
-    types::Constructor,
     Interpreter, PyRef, PyResult, VirtualMachine,
 };
 

@@ -14,26 +14,18 @@ use rustpython_vm::import::import_source;
 use rustpython_vm::Interpreter;
 use rustpython_vm::{builtins::PyFunction, compiler::Mode, object::Traverse};
 
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
+use crate::Runtime;
+
 #[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
+struct Project {
     code: String,
-
     run_mode: RunMode,
-
-    #[serde(skip)]
-    runtime: crate::Runtime,
 }
 
-impl Default for TemplateApp {
-    fn default() -> Self {
-        Self {
-            run_mode: RunMode::OnCodeChange,
-            code: "write(\"Hello World!\")".to_string(),
-            runtime: crate::Runtime::new(),
-        }
-    }
+/// We derive Deserialize/Serialize so we can persist app state on shutdown.
+pub struct TemplateApp {
+    project: Project,
+    runtime: crate::Runtime,
 }
 
 impl TemplateApp {
@@ -44,14 +36,11 @@ impl TemplateApp {
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
-        let mut code = String::new();
-        if let Some(storage) = cc.storage {
-            code = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
+        let project = cc.storage.and_then(|storage| eframe::get_value(storage, eframe::APP_KEY)).unwrap_or_default();
 
         Self {
-            code,
-            ..Default::default()
+            project,
+            runtime: Runtime::new(),
         }
     }
 }
@@ -59,19 +48,19 @@ impl TemplateApp {
 impl eframe::App for TemplateApp {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, &self.code);
+        eframe::set_value(storage, eframe::APP_KEY, &self.project);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut force_step = ctx.input(|r| r.key_pressed(Key::G) && r.modifiers.ctrl);
+        let mut force_step = ctx.input(|r| r.key_pressed(Key::E) && r.modifiers.ctrl);
         let reset_state = ctx.input(|r| r.key_pressed(Key::R) && r.modifiers.ctrl);
 
         TopBottomPanel::top("toope").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("Run", |ui| {
-                    ui.menu_button("Mode", |ui| self.run_mode.show(ui));
-                    force_step |= ui.button("Step (CTRL + G)").clicked();
+                    ui.menu_button("Mode", |ui| self.project.run_mode.show(ui));
+                    force_step |= ui.button("Step (CTRL + E)").clicked();
                 });
 
                 ui.menu_button("State", |ui| {
@@ -86,18 +75,18 @@ impl eframe::App for TemplateApp {
         SidePanel::left("leeft").show(ctx, |ui| {
             ScrollArea::vertical().show(ui, |ui| {
                 changed |=
-                    code_editor_with_autoindent(ui, "CodeEditor".into(), &mut self.code, "py")
+                    code_editor_with_autoindent(ui, "CodeEditor".into(), &mut self.project.code, "py")
                         .changed();
             });
         });
 
         if changed {
             //let start = Instant::now();
-            self.runtime.load(self.code.clone());
+            self.runtime.load(self.project.code.clone());
             //println!("Load took {}s", start.elapsed().as_secs_f32());
         };
 
-        let run_requested = match self.run_mode {
+        let run_requested = match self.project.run_mode {
             RunMode::Continuous => {
                 ctx.request_repaint();
                 true
@@ -205,5 +194,11 @@ impl RunMode {
         ui.selectable_value(self, Self::OnScreenUpdate, "On Screen Update");
         ui.selectable_value(self, Self::OnCodeChange, "On Code Change");
         ui.selectable_value(self, Self::Manual, "Manual");
+    }
+}
+
+impl Default for Project {
+    fn default() -> Self {
+        Self { code: "".into(), run_mode: RunMode::OnScreenUpdate }
     }
 }
