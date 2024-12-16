@@ -1,6 +1,7 @@
 use core::f32;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Instant;
 
 use egui::{CentralPanel, Color32, Id, Response, RichText, ScrollArea, SidePanel, TextEdit, Ui};
 use egui_extras::syntax_highlighting::{highlight, CodeTheme};
@@ -67,8 +68,14 @@ impl eframe::App for TemplateApp {
         });
 
         if changed {
+            let start = Instant::now();
             self.runtime.load(self.code.clone());
+            println!("Load took {}s", start.elapsed().as_secs_f32());
         };
+
+        let start = Instant::now();
+        self.runtime.run_loaded_code();
+        println!("Run took {}ms", (start.elapsed().as_secs_f32() * 1000.0).floor());
 
         CentralPanel::default().show(ctx, |ui| {
             ScrollArea::vertical()

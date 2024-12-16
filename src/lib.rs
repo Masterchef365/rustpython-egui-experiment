@@ -4,7 +4,9 @@ mod app;
 use std::{cell::RefCell, rc::Rc};
 
 pub use app::TemplateApp;
-use rustpython_vm::{compiler::Mode, import::import_source, scope::Scope, Interpreter};
+use rustpython_vm::{
+    builtins::PyCode, compiler::Mode, import::import_source, scope::Scope, Interpreter, PyRef,
+};
 
 struct Runtime {
     interpreter: Interpreter,
@@ -12,6 +14,7 @@ struct Runtime {
     output: Rc<RefCell<String>>,
     error: Option<String>,
     code: String,
+    code_obj: Option<PyRef<PyCode>>,
 }
 
 impl Runtime {
@@ -20,47 +23,50 @@ impl Runtime {
             vm.add_native_modules(rustpython_stdlib::get_module_inits());
         });
 
-        let scope = interpreter.enter(|vm| vm.new_scope_with_builtins());
+        let output = Rc::new(RefCell::new(String::new()));
 
-        Self {
-            code: "".into(),
-            interpreter,
-            scope,
-            output: Default::default(),
-            error: None,
-        }
-    }
+        let scope = interpreter.enter(|vm| {
+            // Create scope
+            let scope = vm.new_scope_with_builtins();
 
-    pub fn load(&mut self, code: String) {
-        let scope = self.scope.clone();
-        self.interpreter.enter(|vm| {
-            self.output.borrow_mut().clear();
-            self.error = None;
-
+            // Set stdout hook
             let sys = vm.import("sys", 0).unwrap();
             let stdout = sys.get_attr("stdout", vm).unwrap();
 
-            let output_c = self.output.clone();
+            let output_c = output.clone();
             let writer = vm.new_function("write", move |s: String| {
                 *output_c.borrow_mut() += &s;
             });
 
             stdout.set_attr("write", writer, vm).unwrap();
 
+            // Import a library
             if let Err(e) = import_source(vm, "euclid", include_str!("./euclid/euclid.py")) {
                 let mut s = String::new();
                 vm.write_exception(&mut s, &e).unwrap();
                 panic!("{}", s);
             }
 
-            let code_obj = vm.compile(&code, Mode::Exec, "<embedded>".to_owned()); 
+            scope
+        });
+
+        Self {
+            code: "".into(),
+            interpreter,
+            scope,
+            output,
+            error: None,
+            code_obj: None,
+        }
+    }
+
+    pub fn load(&mut self, code: String) {
+        let scope = self.scope.clone();
+        self.interpreter.enter(|vm| {
+            let code_obj = vm.compile(&code, Mode::Exec, "<embedded>".to_owned());
             match code_obj {
                 Ok(obj) => {
-                    if let Err(exec_err) = vm.run_code_obj(obj, scope) {
-                        let mut s = String::new();
-                        vm.write_exception(&mut s, &exec_err).unwrap();
-                        self.error = Some(s);
-                    }
+                    self.code_obj = Some(obj);
                 }
                 Err(compile_err) => {
                     self.error = Some(format!("{:#?}", compile_err));
@@ -68,6 +74,26 @@ impl Runtime {
             }
         });
         self.code = code;
+    }
+
+    pub fn run_loaded_code(&mut self) {
+        let Some(code) = self.code_obj.clone() else {
+            return;
+        };
+
+        self.output.borrow_mut().clear();
+        self.error = None;
+
+        let scope = self.scope.clone();
+        self.error = self.interpreter.enter(move |vm| {
+            if let Err(exec_err) = vm.run_code_obj(code, scope) {
+                let mut s = String::new();
+                vm.write_exception(&mut s, &exec_err).unwrap();
+                Some(s)
+            } else {
+                None
+            }
+        });
     }
 
     pub fn reset_state(&mut self) {
