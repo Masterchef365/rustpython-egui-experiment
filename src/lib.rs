@@ -8,9 +8,12 @@ use egui::{Painter, Pos2, Stroke, Ui};
 use rustpython_vm::{
     builtins::{PyCode, PyFloat, PyStrRef, PyType},
     compiler::Mode,
+    function::IntoPyNativeFn,
     import::import_source,
+    pyclass,
+    pymodule,
     scope::Scope,
-    Interpreter, PyObjectRef, PyRef, PyResult, VirtualMachine,
+    Interpreter, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
 };
 
 struct Runtime {
@@ -22,6 +25,8 @@ struct Runtime {
     code_obj: Option<PyRef<PyCode>>,
     child_ui: Option<Rc<RefCell<Ui>>>,
 }
+
+//use rust_py_module::PyEguiResponse;
 
 trait UnwrapException<T> {
     fn unwrap_exception(self, vm: &VirtualMachine) -> T;
@@ -52,6 +57,10 @@ impl Runtime {
     pub fn new() -> Self {
         let interpreter = Interpreter::with_init(Default::default(), |vm| {
             vm.add_native_modules(rustpython_stdlib::get_module_inits());
+            vm.add_native_module(
+                "rust_py_module".to_owned(),
+                Box::new(rust_py_module::make_module),
+            );
         });
 
         let output = Rc::new(RefCell::new(String::new()));
@@ -136,30 +145,36 @@ impl Runtime {
             let egui_obj = anon_object(vm, "EguiIntegration");
 
             let sub = ui.clone();
-            let text_edit_singleline = vm.new_function("text_edit_singleline", move |s: PyStrRef| {
+            Self::add_egui_fn(vm, egui_obj.clone(), "text_edit_singleline", move |s: PyStrRef| {
                 let mut editable = s.to_string();
-                sub.borrow_mut().text_edit_singleline(&mut editable);
-                return editable;
-            });
+                let ret = sub.borrow_mut().text_edit_singleline(&mut editable);
 
-            egui_obj
-                .set_attr("text_edit_singleline", text_edit_singleline, vm)
-                .unwrap_exception(vm);
+                //(editable, PyEguiResponse::from(ret))
+                ()
+            });
 
             let sub = ui.clone();
-            let button = vm.new_function("button", move |s: PyStrRef| {
-                sub.borrow_mut().button(s.as_str()).clicked()
+            Self::add_egui_fn(vm, egui_obj.clone(), "button", move |s: PyStrRef| {
+                dbg!(PyEguiResponse::from(sub.borrow_mut().button(s.as_str())))
             });
-
-            egui_obj
-                .set_attr("button", button, vm)
-                .unwrap_exception(vm);
 
             scope
                 .globals
                 .set_item("egui", egui_obj, vm)
                 .unwrap_exception(vm);
         });
+    }
+
+    fn add_egui_fn<F, FKind>(
+        vm: &VirtualMachine,
+        egui_obj: PyObjectRef,
+        name: &'static str,
+        func: F,
+    ) where
+        F: IntoPyNativeFn<FKind>,
+    {
+        let wrapped = vm.new_function(name, func);
+        egui_obj.set_attr(name, wrapped, vm).unwrap_exception(vm);
     }
 
     pub fn take_up_egui_space(&self, ui: &mut Ui) {
@@ -199,3 +214,31 @@ impl Runtime {
         self.output.clone()
     }
 }
+
+/*
+#[pymodule]
+mod rust_py_module {
+    use super::*;
+
+    #[pyattr]
+    #[pyclass(module = "rust_py_module", name = "PyEguiResponse")]
+*/
+    #[derive(Debug, PyPayload)]
+    pub struct PyEguiResponse {
+        pub clicked: bool,
+    }
+
+    #[pyclass]
+    impl PyEguiResponse {
+    }
+
+
+    impl From<egui::Response> for PyEguiResponse {
+        fn from(value: egui::Response) -> Self {
+            Self {
+                clicked: value.clicked(),
+            }
+        }
+    }
+}
+*/
