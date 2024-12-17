@@ -135,14 +135,24 @@ impl Runtime {
         self.interpreter.enter(move |vm| {
             let egui_obj = anon_object(vm, "EguiIntegration");
 
-            let text_edit_singleline = vm.new_function("edit", move |s: PyStrRef| {
+            let sub = ui.clone();
+            let text_edit_singleline = vm.new_function("text_edit_singleline", move |s: PyStrRef| {
                 let mut editable = s.to_string();
-                ui.borrow_mut().text_edit_singleline(&mut editable);
+                sub.borrow_mut().text_edit_singleline(&mut editable);
                 return editable;
             });
 
             egui_obj
                 .set_attr("text_edit_singleline", text_edit_singleline, vm)
+                .unwrap_exception(vm);
+
+            let sub = ui.clone();
+            let button = vm.new_function("button", move |s: PyStrRef| {
+                sub.borrow_mut().button(s.as_str()).clicked()
+            });
+
+            egui_obj
+                .set_attr("button", button, vm)
                 .unwrap_exception(vm);
 
             scope
