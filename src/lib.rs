@@ -1,7 +1,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 mod app;
-use std::{borrow::BorrowMut, cell::RefCell, rc::Rc};
+use std::{borrow::Borrow, cell::RefCell, rc::Rc};
 
 pub use app::TemplateApp;
 use egui::{Painter, Pos2, Stroke, Ui};
@@ -20,6 +20,7 @@ struct Runtime {
     error: Option<String>,
     code: String,
     code_obj: Option<PyRef<PyCode>>,
+    child_ui: Option<Rc<RefCell<Ui>>>,
 }
 
 trait UnwrapException<T> {
@@ -81,6 +82,7 @@ impl Runtime {
         });
 
         Self {
+            child_ui: None,
             code: "".into(),
             interpreter,
             scope,
@@ -125,15 +127,36 @@ impl Runtime {
         });
     }
 
-    pub fn do_thing(&mut self, ui: &mut Ui) {
-        let scope = self.scope.clone();
-        let mut ui = ui.new_child(Default::default());
-        self.interpreter.enter(move |vm| {
-            vm.new_function("edit", |s: PyStrRef| {
-                ui.text_edit_singleline(s.borrow_mut());
-            });
-        });
+    pub fn set_egui(&mut self, ui: &mut Ui) {
+        let ui = Rc::new(RefCell::new(ui.new_child(Default::default())));
+        self.child_ui = Some(ui.clone());
 
+        let scope = self.scope.clone();
+        self.interpreter.enter(move |vm| {
+            let egui_obj = anon_object(vm, "EguiIntegration");
+
+            let text_edit_singleline = vm.new_function("edit", move |s: PyStrRef| {
+                let mut editable = s.to_string();
+                ui.borrow_mut().text_edit_singleline(&mut editable);
+                return editable;
+            });
+
+            egui_obj
+                .set_attr("text_edit_singleline", text_edit_singleline, vm)
+                .unwrap_exception(vm);
+
+            scope
+                .globals
+                .set_item("egui", egui_obj, vm)
+                .unwrap_exception(vm);
+        });
+    }
+
+    pub fn take_up_egui_space(&self, ui: &mut Ui) {
+        if let Some(child) = &self.child_ui {
+            let desired_size = child.borrow_mut().min_size();
+            ui.allocate_space(desired_size);
+        }
     }
 
     /*

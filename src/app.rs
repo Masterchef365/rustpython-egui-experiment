@@ -113,18 +113,24 @@ impl eframe::App for TemplateApp {
                         }
                     }
 
+                    ui.strong("GUI");
+                    self.runtime.set_egui(ui);
+                    if run_requested || force_step {
+                        self.runtime.run_loaded_code();
+                    }
+                    self.runtime.take_up_egui_space(ui);
+
+                    ui.strong("Console out:");
                     if let Some(error) = self.runtime.error() {
                         ui.label(RichText::new(error).color(Color32::LIGHT_RED));
                     } else {
                         ui.label(RichText::new(self.runtime.stdout().borrow().as_str()).code());
                     }
+
                 });
         });
 
         //let start = Instant::now();
-        if run_requested || force_step {
-            self.runtime.run_loaded_code();
-        }
         //println!("Run took {}ms", (start.elapsed().as_secs_f32() * 1000.0).floor());
     }
 }
