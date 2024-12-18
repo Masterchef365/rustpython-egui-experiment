@@ -11,8 +11,7 @@ use rustpython_vm::{
     compiler::Mode,
     function::IntoPyNativeFn,
     import::import_source,
-    pyclass,
-    pymodule,
+    pyclass, pymodule,
     scope::Scope,
     Interpreter, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
 };
@@ -147,17 +146,20 @@ impl Runtime {
             let egui_obj = anon_object(vm, "EguiIntegration");
 
             let sub = ui.clone();
-            Self::add_egui_fn(vm, egui_obj.clone(), "text_edit_singleline", move |s: PyStrRef| {
-                let mut editable = s.to_string();
-                let ret = sub.borrow_mut().text_edit_singleline(&mut editable);
-
-                //(editable, PyEguiResponse::from(ret))
-                ()
-            });
+            Self::add_egui_fn(
+                vm,
+                egui_obj.clone(),
+                "text_edit_singleline",
+                move |s: PyStrRef| {
+                    let mut editable = s.to_string();
+                    let ret = sub.borrow_mut().text_edit_singleline(&mut editable);
+                    (editable, PyEguiResponse::from(ret))
+                },
+            );
 
             let sub = ui.clone();
             Self::add_egui_fn(vm, egui_obj.clone(), "button", move |s: PyStrRef| {
-                dbg!(PyEguiResponse::from(sub.borrow_mut().button(s.as_str())))
+                PyEguiResponse::from(sub.borrow_mut().button(s.as_str()))
             });
 
             scope
@@ -229,9 +231,7 @@ mod rust_py_module {
     }
 
     #[pyclass]
-    impl PyEguiResponse {
-    }
-
+    impl PyEguiResponse {}
 
     impl From<egui::Response> for PyEguiResponse {
         fn from(value: egui::Response) -> Self {
