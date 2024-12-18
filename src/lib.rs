@@ -174,8 +174,8 @@ impl Runtime {
 
 #[pymodule]
 mod rust_py_module {
-    use egui::Color32;
-    use rustpython_vm::builtins::{PyList, PyListRef};
+    use egui::{Color32, Vec2};
+    use rustpython_vm::builtins::{PyBaseExceptionRef, PyList, PyListRef};
 
     use super::*;
 
@@ -184,6 +184,33 @@ mod rust_py_module {
     #[pyclass(module = "rust_py_module", name = "PyEgui")]
     pub struct PyEgui {
         pub ui: Rc<RefCell<Ui>>,
+    }
+
+    fn parse_sense_from_str(
+        s: &str,
+        vm: &VirtualMachine,
+    ) -> Result<egui::Sense, PyBaseExceptionRef> {
+        let mut sense = egui::Sense {
+            click: false,
+            drag: false,
+            focusable: false,
+        };
+
+        for substr in s.split('|') {
+            match substr {
+                "click" => sense.click = true,
+                "drag" => sense.drag = true,
+                "focusable" => sense.focusable = true,
+                _ => {
+                    return Err(vm.new_exception_msg(
+                        vm.ctx.exceptions.runtime_error.to_owned(),
+                        "Must be click, drag, or focusable".to_string(),
+                    ));
+                }
+            }
+        }
+
+        Ok(sense)
     }
 
     #[pyclass]
@@ -205,6 +232,26 @@ mod rust_py_module {
             PyPainter {
                 paint: self.ui.borrow().painter().clone(),
             }
+        }
+
+        #[pymethod]
+        fn allocate_painter(
+            &self,
+            desired_size: Vec<f32>,
+            sense: String,
+            vm: &VirtualMachine,
+        ) -> Result<(PyEguiResponse, PyPainter), PyBaseExceptionRef> {
+            let sense = parse_sense_from_str(&sense, vm)?;
+            if desired_size.len() != 2 {
+                return Err(vm.new_exception_msg(
+                    vm.ctx.exceptions.runtime_error.to_owned(),
+                    "Desired size must be vec2".to_string(),
+                ));
+            }
+
+            let desired_size = Vec2::new(desired_size[0], desired_size[1]);
+            let (resp, paint) = self.ui.borrow_mut().allocate_painter(desired_size, sense);
+            Ok((PyEguiResponse { resp }, PyPainter { paint }))
         }
     }
 
@@ -251,17 +298,36 @@ mod rust_py_module {
             points: Vec<Vec<f32>>,
             stroke_width: f32,
             color: Vec<u8>,
-        ) {
-            self.paint.line_segment(
-                [
-                    Pos2::new(points[0][0], points[0][1]),
-                    Pos2::new(points[1][0], points[1][1]),
-                ],
-                Stroke::new(
-                    stroke_width,
-                    Color32::from_rgba_premultiplied(color[0], color[1], color[2], color[3]),
-                ),
-            );
+            vm: &VirtualMachine,
+        ) -> Result<(), PyBaseExceptionRef> {
+            for pair in points.windows(2) {
+                if pair[0].len() != 2 || pair[1].len() != 2 {
+                    return Err(vm.new_exception_msg(
+                        vm.ctx.exceptions.runtime_error.to_owned(),
+                        "Points must be of dimension 2".to_owned(),
+                    ));
+                }
+
+                if color.len() != 4 {
+                    return Err(vm.new_exception_msg(
+                        vm.ctx.exceptions.runtime_error.to_owned(),
+                        "Colors are from premultiplied RGBA".to_owned(),
+                    ));
+                }
+
+                self.paint.line_segment(
+                    [
+                        Pos2::new(pair[0][0], pair[0][1]),
+                        Pos2::new(pair[1][0], pair[1][1]),
+                    ],
+                    Stroke::new(
+                        stroke_width,
+                        Color32::from_rgba_premultiplied(color[0], color[1], color[2], color[3]),
+                    ),
+                );
+            }
+
+            Ok(())
         }
     }
 
