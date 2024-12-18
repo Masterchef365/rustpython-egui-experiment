@@ -16,7 +16,7 @@ use rustpython_vm::{builtins::PyFunction, compiler::Mode, object::Traverse};
 
 use crate::Runtime;
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Default)]
 struct Project {
     code: String,
     run_mode: RunMode,
@@ -197,9 +197,10 @@ fn code_editor_with_autoindent(
     ret.response
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(serde::Deserialize, serde::Serialize, Default, Clone, Copy, Debug, PartialEq, Eq)]
 enum RunMode {
     Continuous,
+    #[default]
     OnScreenUpdate,
     OnCodeChange,
     Manual,
@@ -215,11 +216,5 @@ impl RunMode {
 
     fn show_run_button(&self) -> bool {
         matches!(self, Self::OnCodeChange | Self::Manual)
-    }
-}
-
-impl Default for Project {
-    fn default() -> Self {
-        Self { code: "".into(), run_mode: RunMode::OnScreenUpdate }
     }
 }
