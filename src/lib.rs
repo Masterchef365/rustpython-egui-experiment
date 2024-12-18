@@ -5,6 +5,7 @@ use std::{borrow::Borrow, cell::RefCell, rc::Rc};
 
 pub use app::TemplateApp;
 use egui::{Painter, Pos2, Stroke, Ui};
+use rust_py_module::PyEguiResponse;
 use rustpython_vm::{
     builtins::{PyCode, PyFloat, PyStrRef, PyType},
     compiler::Mode,
@@ -71,6 +72,7 @@ impl Runtime {
 
             // Set stdout hook
             let sys = vm.import("sys", 0).unwrap_exception(vm);
+            let _ = vm.import("rust_py_module", 0).unwrap_exception(vm);
 
             let stdout = anon_object(vm, "InternalStdout");
 
@@ -215,14 +217,12 @@ impl Runtime {
     }
 }
 
-/*
 #[pymodule]
 mod rust_py_module {
     use super::*;
 
     #[pyattr]
     #[pyclass(module = "rust_py_module", name = "PyEguiResponse")]
-*/
     #[derive(Debug, PyPayload)]
     pub struct PyEguiResponse {
         pub clicked: bool,
@@ -241,4 +241,3 @@ mod rust_py_module {
         }
     }
 }
-*/
