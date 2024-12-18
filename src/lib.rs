@@ -158,23 +158,6 @@ impl Runtime {
         }
     }
 
-    /*
-    pub fn set_painter(&mut self, painter: Painter) {
-        let scope = self.scope.clone();
-        self.interpreter.enter(move |vm| {
-            vm.new_function("line", |a: PyObjectRef, vm: &VirtualMachine| {
-                let x1: f32 = a
-                    .get_attr("x", vm)
-                    .unwrap_exception(vm)
-                    .try_into_value(vm)
-                    .unwrap_exception(vm);
-                //painter.line_segment([Pos2::new(a[0], a[1]), Pos2::new(b[0], b[1])], Stroke::new(stroke, color.into()));
-            });
-            //scope.globals.
-        });
-    }
-    */
-
     pub fn reset_state(&mut self) {
         let old = std::mem::replace(self, Self::new());
         self.load(old.code);
@@ -191,6 +174,9 @@ impl Runtime {
 
 #[pymodule]
 mod rust_py_module {
+    use egui::Color32;
+    use rustpython_vm::builtins::{PyList, PyListRef};
+
     use super::*;
 
     #[pyattr]
@@ -198,6 +184,35 @@ mod rust_py_module {
     #[pyclass(module = "rust_py_module", name = "PyEgui")]
     pub struct PyEgui {
         pub ui: Rc<RefCell<Ui>>,
+    }
+
+    #[pyclass]
+    impl PyEgui {
+        #[pymethod]
+        fn button(&self, text: PyStrRef) -> PyEguiResponse {
+            PyEguiResponse::from(self.ui.borrow_mut().button(text.as_str()))
+        }
+
+        #[pymethod]
+        fn text_edit_singleline(&self, text: PyStrRef) -> (String, PyEguiResponse) {
+            let mut editable = text.to_string();
+            let ret = self.ui.borrow_mut().text_edit_singleline(&mut editable);
+            (editable, PyEguiResponse::from(ret))
+        }
+
+        #[pymethod]
+        fn painter(&self) -> PyPainter {
+            PyPainter {
+                paint: self.ui.borrow().painter().clone(),
+            }
+        }
+    }
+
+    impl std::fmt::Debug for PyEgui {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let ptr = self.ui.as_ptr();
+            writeln!(f, "PyEgui {:?}", ptr)
+        }
     }
 
     #[pyattr]
@@ -221,25 +236,38 @@ mod rust_py_module {
         }
     }
 
-    #[pyclass]
-    impl PyEgui {
-        #[pymethod]
-        fn button(&self, text: PyStrRef) -> PyEguiResponse {
-            PyEguiResponse::from(self.ui.borrow_mut().button(text.as_str()))
-        }
+    #[pyattr]
+    #[pyclass(module = "rust_py_module", name = "PyPainter")]
+    #[derive(PyPayload)]
+    pub struct PyPainter {
+        pub paint: egui::Painter,
+    }
 
+    #[pyclass]
+    impl PyPainter {
         #[pymethod]
-        fn text_edit_singleline(&self, text: PyStrRef) -> (String, PyEguiResponse) {
-            let mut editable = text.to_string();
-            let ret = self.ui.borrow_mut().text_edit_singleline(&mut editable);
-            (editable, PyEguiResponse::from(ret))
+        fn line(
+            &self,
+            points: Vec<Vec<f32>>,
+            stroke_width: f32,
+            color: Vec<u8>,
+        ) {
+            self.paint.line_segment(
+                [
+                    Pos2::new(points[0][0], points[0][1]),
+                    Pos2::new(points[1][0], points[1][1]),
+                ],
+                Stroke::new(
+                    stroke_width,
+                    Color32::from_rgba_premultiplied(color[0], color[1], color[2], color[3]),
+                ),
+            );
         }
     }
 
-    impl std::fmt::Debug for PyEgui {
+    impl std::fmt::Debug for PyPainter {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let ptr = self.ui.as_ptr();
-            writeln!(f, "PyEgui {:?}", ptr)
+            writeln!(f, "PyPainter")
         }
     }
 }
