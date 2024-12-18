@@ -231,7 +231,12 @@ mod rust_py_module {
     }
 
     #[pyclass]
-    impl PyEguiResponse {}
+    impl PyEguiResponse {
+        #[pymethod]
+        fn clicked(&self) -> bool {
+            self.clicked
+        }
+    }
 
     impl From<egui::Response> for PyEguiResponse {
         fn from(value: egui::Response) -> Self {
