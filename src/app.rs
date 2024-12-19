@@ -103,6 +103,10 @@ impl eframe::App for TemplateApp {
         };
 
         CentralPanel::default().show(ctx, |ui| {
+            //let (resp, paint) = ui.allocate_painter(egui::Vec2::splat(200.), egui::Sense::click());
+            //paint.line_segment([egui::Pos2::ZERO, egui::Pos2::new(1e3, 1e3)], egui::Stroke::new(1., egui::Color32::BLUE));
+            //paint.circle_filled(egui::Pos2::ZERO, 1000.0, egui::Color32::BLUE);
+
             ScrollArea::vertical()
                 .max_width(f32::INFINITY)
                 .auto_shrink([false, false])
