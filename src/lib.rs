@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 
 pub use app::TemplateApp;
 use egui::{Painter, Pos2, Stroke, Ui};
-use rust_py_module::{PyEgui, PyEguiResponse};
+use rust_py_module::{PyEgui, PyResponse};
 use rustpython_vm::{
     builtins::{PyCode, PyFloat, PyStrRef, PyType},
     compiler::Mode,
@@ -246,15 +246,15 @@ mod rust_py_module {
     #[pyclass]
     impl PyEgui {
         #[pymethod]
-        fn button(&self, text: PyStrRef) -> PyEguiResponse {
-            PyEguiResponse::from(self.ui.borrow_mut().button(text.as_str()))
+        fn button(&self, text: PyStrRef) -> PyResponse {
+            PyResponse::from(self.ui.borrow_mut().button(text.as_str()))
         }
 
         #[pymethod]
-        fn text_edit_singleline(&self, text: PyStrRef) -> (String, PyEguiResponse) {
+        fn text_edit_singleline(&self, text: PyStrRef) -> (String, PyResponse) {
             let mut editable = text.to_string();
             let ret = self.ui.borrow_mut().text_edit_singleline(&mut editable);
-            (editable, PyEguiResponse::from(ret))
+            (editable, PyResponse::from(ret))
         }
 
         #[pymethod]
@@ -270,13 +270,13 @@ mod rust_py_module {
             desired_size: Vec<f32>,
             sense: String,
             vm: &VirtualMachine,
-        ) -> Result<(PyEguiResponse, PyPainter), PyBaseExceptionRef> {
+        ) -> Result<(PyResponse, PyPainter), PyBaseExceptionRef> {
             let sense = parse_sense_from_str(&sense, vm)?;
             let desired_size = parse_vec2(&desired_size, vm)?;
 
             let (resp, paint) = self.ui.borrow_mut().allocate_painter(desired_size, sense);
 
-            Ok((PyEguiResponse { resp }, PyPainter { paint }))
+            Ok((PyResponse { resp }, PyPainter { paint }))
         }
     }
 
@@ -288,21 +288,46 @@ mod rust_py_module {
     }
 
     #[pyattr]
-    #[pyclass(module = "rust_py_module", name = "PyEguiResponse")]
+    #[pyclass(module = "rust_py_module", name = "PyResponse")]
     #[derive(Debug, PyPayload)]
-    pub struct PyEguiResponse {
+    pub struct PyResponse {
         pub resp: egui::Response,
     }
 
+    #[pyattr]
+    #[pyclass(module = "rust_py_module", name = "PyRect")]
+    #[derive(Debug, PyPayload)]
+    pub struct PyRect {
+        pub rect: egui::Rect,
+    }
+
     #[pyclass]
-    impl PyEguiResponse {
+    impl PyResponse {
         #[pymethod]
         fn clicked(&self) -> bool {
             self.resp.clicked()
         }
+
+        #[pymethod]
+        fn rect(&self) -> PyRect {
+            PyRect { rect: self.resp.rect }
+        }
     }
 
-    impl From<egui::Response> for PyEguiResponse {
+    #[pyclass]
+    impl PyRect {
+        #[pymethod]
+        fn min(&self) -> (f32, f32) {
+            (self.rect.min.x, self.rect.min.y)
+        }
+
+        #[pymethod]
+        fn max(&self) -> (f32, f32) {
+            (self.rect.max.x, self.rect.max.y)
+        }
+    }
+
+    impl From<egui::Response> for PyResponse {
         fn from(resp: egui::Response) -> Self {
             Self { resp }
         }
