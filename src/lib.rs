@@ -174,6 +174,7 @@ impl Runtime {
 
 #[pymodule]
 mod rust_py_module {
+    use egui::Align2;
     use rustpython_vm::builtins::PyBaseExceptionRef;
 
     use super::*;
@@ -183,6 +184,27 @@ mod rust_py_module {
     #[pyclass(module = "rust_py_module", name = "PyEgui")]
     pub struct PyEgui {
         pub ui: Rc<RefCell<Ui>>,
+    }
+
+    fn parse_align2_from_str(
+        s: &str,
+        vm: &VirtualMachine,
+    ) -> Result<egui::Align2, PyBaseExceptionRef> {
+        match s.to_uppercase().as_str() {
+            "LEFT_BOTTOM" => Ok(Align2::LEFT_BOTTOM),
+            "LEFT_CENTER" => Ok(Align2::LEFT_CENTER),
+            "LEFT_TOP" => Ok(Align2::LEFT_TOP),
+            "CENTER_BOTTOM" => Ok(Align2::CENTER_BOTTOM),
+            "" | "CENTER_CENTER" => Ok(Align2::CENTER_CENTER),
+            "CENTER_TOP" => Ok(Align2::CENTER_TOP),
+            "RIGHT_BOTTOM" => Ok(Align2::RIGHT_BOTTOM),
+            "RIGHT_CENTER" => Ok(Align2::RIGHT_CENTER),
+            "RIGHT_TOP" => Ok(Align2::RIGHT_TOP),
+            _ => Err(vm.new_exception_msg(
+                vm.ctx.exceptions.runtime_error.to_owned(),
+                "Must be {LEFT,RIGHT,CENTER}_{TOP,CENTER,BOTTOM}".to_string(),
+            )),
+        }
     }
 
     fn parse_sense_from_str(
@@ -310,7 +332,9 @@ mod rust_py_module {
 
         #[pymethod]
         fn rect(&self) -> PyRect {
-            PyRect { rect: self.resp.rect }
+            PyRect {
+                rect: self.resp.rect,
+            }
         }
     }
 
@@ -362,16 +386,41 @@ mod rust_py_module {
         }
 
         #[pymethod]
-        fn circle_filled(
+        fn circle(
             &self,
             center: Vec<f32>,
             radius: f32,
-            color: Vec<u8>,
+            fill_color: Vec<u8>,
+            stroke_width: f32,
+            stroke_color: Vec<u8>,
             vm: &VirtualMachine,
         ) -> Result<(), PyBaseExceptionRef> {
-            self.paint
-                .circle_filled(parse_pos2(&center, vm)?, radius, parse_color(&color, vm)?);
+            self.paint.circle(
+                parse_pos2(&center, vm)?,
+                radius,
+                parse_color(&fill_color, vm)?,
+                Stroke::new(stroke_width, parse_color(&stroke_color, vm)?),
+            );
             Ok(())
+        }
+
+        #[pymethod]
+        fn text(
+            &self,
+            pos: Vec<f32>,
+            anchor: String,
+            text: PyStrRef,
+            text_color: Vec<u8>,
+            vm: &VirtualMachine,
+        ) -> Result<PyRect, PyBaseExceptionRef> {
+            let rect = self.paint.text(
+                parse_pos2(&pos, vm)?,
+                parse_align2_from_str(&anchor, vm)?,
+                text.as_str(),
+                Default::default(),
+                parse_color(&text_color, vm)?,
+            );
+            Ok(PyRect { rect })
         }
     }
 

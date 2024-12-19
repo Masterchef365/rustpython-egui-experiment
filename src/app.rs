@@ -55,13 +55,18 @@ impl eframe::App for TemplateApp {
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // TOOD: Wait this is stupid on mobile
         let mut force_step = ctx.input(|r| r.key_pressed(Key::E) && r.modifiers.ctrl);
         let mut reset_state = ctx.input(|r| r.key_pressed(Key::R) && r.modifiers.ctrl);
+        let mut force_save = ctx.input(|r| r.key_pressed(Key::S) && r.modifiers.ctrl);
 
         TopBottomPanel::top("toope").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
+                ui.menu_button("Project", |ui| {
+                    force_save |= ui.button("Save (CTRL + S)").clicked();
+                });
+
                 ui.menu_button("Run", |ui| {
                     ui.menu_button("Mode", |ui| self.project.run_mode.show(ui));
                     force_step |= ui.button("Step (CTRL + E)").clicked();
@@ -70,8 +75,15 @@ impl eframe::App for TemplateApp {
                 ui.menu_button("State", |ui| {
                     reset_state |= ui.button("Reset (CTRL + R)").clicked();
                 });
+
             });
         });
+
+        if force_save {
+            if let Some(storage) = frame.storage_mut() {
+                self.save(storage);
+            }
+        }
 
         if reset_state {
             self.runtime.reset_state();
