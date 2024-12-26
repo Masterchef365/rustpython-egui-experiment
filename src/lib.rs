@@ -86,7 +86,7 @@ impl Runtime {
                 .unwrap_exception(vm);
 
             // Import a library
-            import_source(vm, "euclid", include_str!("./euclid/euclid.py")).unwrap_exception(vm);
+            //import_source(vm, "euclid", include_str!("./euclid/euclid.py")).unwrap_exception(vm);
 
             scope
         });
