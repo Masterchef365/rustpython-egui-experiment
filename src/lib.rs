@@ -93,7 +93,19 @@ impl Runtime {
 
         Self {
             child_ui: None,
-            code: "".into(),
+            code: r#"# The same scope is used each frame (unless reset)
+# So we can declare variables using something like:
+try: s
+except: s = "type here"
+
+# Then we can just call some builtin functions
+s, resp = egui.text_edit_singleline(s)
+
+# Including simulated stdout
+print("Hello, world!")
+print()
+print(f"You cannot {s}")"#
+                .into(),
             interpreter,
             scope,
             output,
@@ -104,7 +116,7 @@ impl Runtime {
 
     pub fn load(&mut self, code: String) {
         self.interpreter.enter(|vm| {
-            let code_obj = vm.compile(&code, Mode::Exec, "<embedded>".to_owned());
+            let code_obj = vm.compile(&code, Mode::Exec, "the code you just wrote in the thingy".to_owned());
             match code_obj {
                 Ok(obj) => {
                     self.code_obj = Some(obj);
@@ -202,7 +214,7 @@ mod rust_py_module {
             "RIGHT_TOP" => Ok(Align2::RIGHT_TOP),
             _ => Err(vm.new_exception_msg(
                 vm.ctx.exceptions.runtime_error.to_owned(),
-                "Must be {LEFT,RIGHT,CENTER}_{TOP,CENTER,BOTTOM}".to_string(),
+                "Must be {LEFT,CENTER,RIGHT}_{TOP,CENTER,BOTTOM}".to_string(),
             )),
         }
     }
