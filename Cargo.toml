@@ -26,9 +26,10 @@ serde = { version = "1", features = ["derive"] }
 egui_extras = { version = "0.29.1", features = ["syntect"] }
 
 rustpython-vm = "0.4.0"
-#rustpython-vm = { git = "https://github.com/RustPython/RustPython.git", rev = "01f7536" }
+#rustpython-vm = { git = "https://github.com/theshubhamp/RustPython.git", branch = "pybool-asnumber-unwrap" }
 rustpython-stdlib = "0.4.0"
-#rustpython-stdlib = { git = "https://github.com/RustPython/RustPython.git", rev = "01f7536" }
+#rustpython-stdlib = { git = "https://github.com/theshubhamp/RustPython.git", branch = "pybool-asnumber-unwrap" }
+rustpython-ndarray = { path = "../rustpython-ndarray" }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
