@@ -61,6 +61,10 @@ impl Runtime {
                 "rust_py_module".to_owned(),
                 Box::new(rust_py_module::make_module),
             );
+            vm.add_native_module(
+                "ndarray".to_owned(),
+                Box::new(rustpython_ndarray::make_module)
+            )
         });
 
         let output = Rc::new(RefCell::new(String::new()));
@@ -72,6 +76,7 @@ impl Runtime {
             // Set stdout hook
             let sys = vm.import("sys", 0).unwrap_exception(vm);
             let _ = vm.import("rust_py_module", 0).unwrap_exception(vm);
+            let _ = vm.import("ndarray", 0).unwrap_exception(vm);
 
             let stdout = anon_object(vm, "InternalStdout");
 
