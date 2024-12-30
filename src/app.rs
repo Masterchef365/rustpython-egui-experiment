@@ -1,18 +1,11 @@
 use core::f32;
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::time::Instant;
 
-use egui::panel::TopBottomSide;
 use egui::{
     CentralPanel, Color32, Id, Key, Response, RichText, ScrollArea, SidePanel, TextEdit,
     TopBottomPanel, Ui,
 };
 use egui_extras::syntax_highlighting::{highlight, CodeTheme};
-use rustpython_vm::import::import_source;
 //use egui_extras::syntax_highlighting::{highlight, CodeTheme};
-use rustpython_vm::Interpreter;
-use rustpython_vm::{builtins::PyFunction, compiler::Mode, object::Traverse};
 
 use crate::Runtime;
 

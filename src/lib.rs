@@ -4,13 +4,12 @@ mod app;
 use std::{cell::RefCell, rc::Rc};
 
 pub use app::TemplateApp;
-use egui::{Painter, Pos2, Stroke, Ui};
-use rust_py_module::{PyEgui, PyResponse};
+use egui::{Stroke, Ui};
+use rust_py_module::PyEgui;
 use rustpython_vm::{
-    builtins::{PyCode, PyFloat, PyStrRef, PyType},
+    builtins::{PyCode, PyStrRef},
     compiler::Mode,
     function::IntoPyNativeFn,
-    import::import_source,
     pyclass, pymodule,
     scope::Scope,
     Interpreter, PyObjectRef, PyPayload, PyRef, PyResult, VirtualMachine,
